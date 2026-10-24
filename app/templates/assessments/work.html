@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% from "_macros.html" import change_badge, action_badge, score %}
+{% block title %}{{ a.name }}{% endblock %}
+{% block content %}
+{% set locked = a.is_completed %}
+<nav class="small mb-2"><a href="{{ url_for('assessments.index') }}">Assessments</a> / <a href="{{ url_for('frameworks.detail', framework_id=a.framework.id) }}">{{ a.framework.name }}</a> /</nav>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h3 class="mb-1">{{ a.name }}
+      {% if locked %}<span class="badge text-bg-success fs-6 align-middle">completed {{ a.completed_at|d }}</span>
+      {% else %}<span class="badge text-bg-primary fs-6 align-middle">in progress</span>{% endif %}</h3>
+    <div class="text-muted small">{{ a.version.display_name }} · {{ a.reference_date|d }}{% if a.assessor %} · {{ a.assessor }}{% endif %}
+      {% if a.based_on %} · pre-filled from <a href="{{ url_for('assessments.report', assessment_id=a.based_on.id) }}">{{ a.based_on.name }}</a>{% endif %}</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#details"><i class="bi bi-pencil"></i> Details</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('assessments.report', assessment_id=a.id) }}"><i class="bi bi-clipboard-data"></i> Report &amp; action plan</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('assessments.export', assessment_id=a.id) }}"><i class="bi bi-download"></i></a>
+    {% if locked %}
+      <form method="post" action="{{ url_for('assessments.reopen', assessment_id=a.id) }}"><button class="btn btn-outline-warning">Reopen</button></form>
+    {% else %}
+      <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#completeModal"><i class="bi bi-flag"></i> Terminate</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="collapse mb-3" id="details"><div class="card"><div class="card-body">
+  <form method="post" action="{{ url_for('assessments.edit', assessment_id=a.id) }}" class="row g-2">
+    <div class="col-md-5"><label class="form-label small">Name</label><input name="name" class="form-control" value="{{ a.name }}"></div>
+    <div class="col-md-4"><label class="form-label small">Assessor</label><input name="assessor" class="form-control" value="{{ a.assessor }}"></div>
+    <div class="col-md-3"><label class="form-label small">Assessment date</label><input type="date" name="assessment_date" class="form-control" value="{{ a.reference_date.isoformat() }}"></div>
+    <div class="col-md-6"><label class="form-label small">Scope</label><textarea name="scope" class="form-control" rows="2">{{ a.scope }}</textarea></div>
+    <div class="col-md-6"><label class="form-label small">General comment</label><textarea name="general_comment" class="form-control" rows="2">{{ a.general_comment }}</textarea></div>
+    <div class="col-12 d-flex justify-content-between">
+      <button class="btn btn-primary">Save details</button>
+    </div>
+  </form>
+  <form method="post" action="{{ url_for('assessments.delete', assessment_id=a.id) }}" onsubmit="return confirm('Delete this assessment, its answers and its actions?')" class="mt-2">
+    <button class="btn btn-sm btn-link text-danger p-0">Delete assessment</button></form>
+</div></div></div>
+
+{# KPI strip (updated live by autosave) #}
+<div class="card mb-3"><div class="card-body py-2">
+  <div class="row align-items-center g-2">
+    <div class="col-lg-6">
+      <div class="small text-muted mb-1">Progress: <strong id="kpi-progress">{{ kpis.progress }}</strong>% assessed</div>
+      <div class="progress" style="height:.5rem"><div id="kpi-progress-bar" class="progress-bar" style="width: {{ kpis.progress }}%"></div></div>
+    </div>
+    <div class="col-lg-6 d-flex flex-wrap gap-3 small">
+      {% for key, label, color in RESULT_STATUSES %}
+        <span><span class="badge text-bg-{{ color }}" id="kpi-{{ key }}">{{ kpis.counts[key] }}</span> {{ label }}</span>
+      {% endfor %}
+      <span><span class="badge text-bg-light border" id="kpi-not_assessed">{{ kpis.counts.not_assessed }}</span> Not assessed</span>
+      <span>Score <strong id="kpi-score">{{ kpis.score if kpis.score is not none else 'n/a' }}</strong>{{ '%' }}</span>
+    </div>
+  </div>
+</div></div>
+
+<form method="post" action="{{ url_for('assessments.save', assessment_id=a.id) }}" id="assessmentForm"
+      data-autosave-url="{{ url_for('assessments.autosave', assessment_id=a.id, result_id=0) }}" data-locked="{{ 1 if locked else 0 }}">
+<div class="sticky-toolbar d-flex flex-wrap gap-2 align-items-center mb-2">
+  <div class="btn-group btn-group-sm" id="filters">
+    <button type="button" class="btn btn-dark" data-filter="">All</button>
+    <button type="button" class="btn btn-outline-dark" data-filter="not_assessed">Not assessed</button>
+    <button type="button" class="btn btn-outline-dark" data-filter="review">To review (<span id="kpi-review">{{ kpis.needs_review }}</span>)</button>
+    {% for key, label, color in RESULT_STATUSES %}<button type="button" class="btn btn-outline-dark" data-filter="{{ key }}">{{ label }}</button>{% endfor %}
+  </div>
+  <input type="search" id="search" class="form-control form-control-sm" style="max-width: 16rem" placeholder="Search code, text, comment…">
+  <span class="ms-auto save-state small text-muted" id="saveState"></span>
+  {% if not locked %}<button class="btn btn-sm btn-primary"><i class="bi bi-save"></i> Save</button>{% endif %}
+</div>
+
+{% if locked %}<div class="alert alert-light small">This assessment is completed and read-only. Reopen it to change answers. Actions can still be updated from the report.</div>{% endif %}
+
+{% set ns = namespace(section=None) %}
+{% for r in results %}
+  {% set req = r.requirement %}
+  {% if req.section != ns.section %}
+    {% set ns.section = req.section %}
+    <h5 class="mt-4 mb-2 section-title" data-section="{{ req.section }}">{{ req.section or '(no section)' }}</h5>
+  {% endif %}
+  <div class="card req-card mb-2" id="r-{{ r.id }}" data-id="{{ r.id }}" data-status="{{ r.status or 'not_assessed' }}"
+       data-review="{{ 1 if r.needs_review else 0 }}" data-section="{{ req.section }}">
+    <div class="card-body py-2">
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div><strong class="me-1">{{ req.code }}</strong> {{ req.title }}
+            {% if req.change_type in ('new', 'modified') %}{{ change_badge(req.change_type) }}{% endif %}
+            <button type="button" class="badge text-bg-warning border-0 review-badge {{ '' if r.needs_review else 'd-none' }}" {{ 'disabled' if locked }}
+              title="Pre-filled from an older assessment but the requirement wording changed since. Click to confirm the answer as is.">to review <i class="bi bi-check2"></i></button>
+          </div>
+          {% if req.description %}<div class="small text-muted pre-wrap mt-1">{{ req.description }}</div>{% endif %}
+          {% if req.guidance %}<details class="small mt-1"><summary>Guidance</summary><div class="pre-wrap">{{ req.guidance }}</div></details>{% endif %}
+          <div class="btn-group btn-group-sm flex-wrap mt-2" role="group">
+            {% for key, label, color in RESULT_STATUSES %}
+              <input type="radio" class="btn-check status-radio" name="status_{{ r.id }}" id="s{{ r.id }}{{ key }}" value="{{ key }}" {{ 'checked' if r.status == key }} {{ 'disabled' if locked }}>
+              <label class="btn btn-outline-{{ color }}" for="s{{ r.id }}{{ key }}">{{ label }}</label>
+            {% endfor %}
+            <input type="radio" class="btn-check status-radio" name="status_{{ r.id }}" id="s{{ r.id }}none" value="" {{ 'checked' if not r.status }} {{ 'disabled' if locked }}>
+            <label class="btn btn-outline-light text-muted border" for="s{{ r.id }}none" title="Not assessed yet">?</label>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <textarea class="form-control mb-1 autosave" data-field="comment" name="comment_{{ r.id }}" rows="2" placeholder="Comment / finding" {{ 'readonly' if locked }}>{{ r.comment }}</textarea>
+          <textarea class="form-control autosave" data-field="evidence" name="evidence_{{ r.id }}" rows="1" placeholder="Evidence (documents, links...)" {{ 'readonly' if locked }}>{{ r.evidence }}</textarea>
+        </div>
+        <div class="col-lg-3 small">
+          {% for act in actions_by_req.get(req.id, []) %}
+            <div class="mb-1">{{ action_badge(act.status) }} <a href="{{ url_for('actions.form', action_id=act.id, next=request.path ~ '#r-' ~ r.id) }}">{{ act.title }}</a>
+              {% if act.due_date %}<span class="{{ 'text-danger' if act.is_overdue else 'text-muted' }}">· {{ act.due_date|d }}</span>{% endif %}</div>
+          {% endfor %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('actions.form', assessment_id=a.id, requirement_id=req.id, next=request.path ~ '#r-' ~ r.id) }}"><i class="bi bi-plus-lg"></i> Action</a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</form>
+
+<div class="modal fade" id="completeModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <form method="post" action="{{ url_for('assessments.complete', assessment_id=a.id) }}">
+    <div class="modal-header"><h5 class="modal-title">Terminate the assessment</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <p>The answers become read-only (you can reopen later). The assessment then appears in the evolution timeline at the date below.</p>
+      <label class="form-label">Assessment date</label>
+      <input type="date" name="assessment_date" class="form-control mb-3" value="{{ a.reference_date.isoformat() }}">
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="allow_unanswered" value="1" id="allowUn">
+        <label class="form-check-label" for="allowUn">Complete anyway if some requirements are not assessed</label></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-success">Terminate</button></div>
+  </form>
+</div></div></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='assessment.js') }}"></script>{% endblock %}

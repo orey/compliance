@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_macros.html" import priority_badge, action_badge %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body">
+    <div class="value">{{ frameworks|length }}</div><div class="label">Repositories</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi"><div class="card-body">
+    <div class="value">{{ in_progress|length }}</div><div class="label">Assessments in progress</div></div></div></div>
+  <div class="col-6 col-lg-3"><a class="text-decoration-none" href="{{ url_for('actions.index', status='open') }}"><div class="card kpi"><div class="card-body">
+    <div class="value text-body">{{ open_count }}</div><div class="label">Open actions</div></div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="text-decoration-none" href="{{ url_for('actions.index', status='overdue') }}"><div class="card kpi"><div class="card-body">
+    <div class="value {{ 'text-danger' if overdue_count else 'text-body' }}">{{ overdue_count }}</div><div class="label">Overdue actions</div></div></div></a></div>
+</div>
+
+{% if not frameworks %}
+<div class="card"><div class="card-body text-center py-5">
+  <h4>Welcome</h4>
+  <p class="text-muted">Start by creating a repository of requirements (ISO 27001, NATO, corporate policy...) and uploading its first version from a spreadsheet.</p>
+  <a class="btn btn-primary" href="{{ url_for('frameworks.index') }}">Create a repository</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('frameworks.template') }}"><i class="bi bi-file-earmark-spreadsheet"></i> Download the spreadsheet template</a>
+</div></div>
+{% else %}
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header bg-white fw-semibold">Ongoing assessments</div>
+      <ul class="list-group list-group-flush">
+        {% for a in in_progress %}
+          <a class="list-group-item list-group-item-action d-flex justify-content-between" href="{{ url_for('assessments.work', assessment_id=a.id) }}">
+            <span><strong>{{ a.name }}</strong><br><small class="text-muted">{{ a.version.display_name }} · last saved {{ a.updated_at|d }}</small></span>
+            <span class="text-primary align-self-center">Continue <i class="bi bi-arrow-right"></i></span>
+          </a>
+        {% else %}
+          <li class="list-group-item text-muted">No assessment in progress.</li>
+        {% endfor %}
+      </ul>
+      <div class="card-header bg-white fw-semibold border-top">Recently completed</div>
+      <ul class="list-group list-group-flush">
+        {% for a in recent_completed %}
+          <a class="list-group-item list-group-item-action" href="{{ url_for('assessments.report', assessment_id=a.id) }}">
+            <strong>{{ a.name }}</strong> <small class="text-muted">{{ a.version.display_name }} · {{ a.reference_date|d }}</small>
+          </a>
+        {% else %}
+          <li class="list-group-item text-muted">None yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header bg-white fw-semibold d-flex justify-content-between">
+      <span>Next actions by due date</span><a href="{{ url_for('actions.index') }}" class="small">All actions</a></div>
+      <table class="table table-sm mb-0">
+        <tbody>
+        {% for act in upcoming %}
+          <tr class="{{ 'table-danger' if act.is_overdue }}">
+            <td class="text-nowrap">{{ act.due_date|d }}</td>
+            <td><a href="{{ url_for('actions.form', action_id=act.id) }}">{{ act.title }}</a><br>
+              <small class="text-muted">{{ act.assessment.framework.name }}{% if act.requirement %} · {{ act.requirement.code }}{% endif %}{% if act.owner %} · {{ act.owner }}{% endif %}</small></td>
+            <td>{{ priority_badge(act.priority) }}</td>
+            <td>{{ action_badge(act.status) }}</td>
+          </tr>
+        {% else %}
+          <tr><td class="text-muted p-3">No dated open action.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

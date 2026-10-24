@@ -1,0 +1,38 @@
+{# Expects: actions, show_assessment #}
+{% from "_macros.html" import priority_badge %}
+<div class="table-responsive">
+<table class="table table-sm table-hover mb-0">
+  <thead><tr>
+    <th>Due</th>{% if show_assessment %}<th>Repository / assessment</th>{% endif %}<th>Req.</th><th>Action</th><th>Owner</th><th>Priority</th><th style="width:10rem">Status</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for act in actions %}
+    <tr class="{{ 'table-danger' if act.is_overdue }}">
+      <td class="text-nowrap">{{ act.due_date|d or '—' }}{% if act.is_overdue %} <i class="bi bi-exclamation-triangle-fill text-danger" title="Overdue"></i>{% endif %}</td>
+      {% if show_assessment %}<td class="small">{{ act.assessment.framework.name }}<br>
+        <a href="{{ url_for('assessments.report', assessment_id=act.assessment.id) }}" class="text-muted">{{ act.assessment.name }}</a></td>{% endif %}
+      <td class="text-nowrap small" title="{{ act.requirement.title if act.requirement }}">{{ act.requirement.code if act.requirement else '' }}</td>
+      <td><a href="{{ url_for('actions.form', action_id=act.id) }}">{{ act.title }}</a>
+        {% if act.description %}<div class="small text-muted">{{ act.description|truncate(120) }}</div>{% endif %}
+        {% if act.carried_from %}<div class="small text-muted"><i class="bi bi-arrow-return-right"></i> carried over from {{ act.carried_from.assessment.name }}</div>{% endif %}</td>
+      <td>{{ act.owner }}</td>
+      <td>{{ priority_badge(act.priority) }}</td>
+      <td>
+        {% if act.status == 'carried_over' %}<span class="badge text-bg-info">Carried over</span>
+        {% else %}
+        <form method="post" action="{{ url_for('actions.set_status', action_id=act.id) }}">
+          <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for key, label, color in ACTION_STATUSES if key != 'carried_over' %}<option value="{{ key }}" {{ 'selected' if act.status == key }}>{{ label }}</option>{% endfor %}
+          </select>
+        </form>
+        {% endif %}
+      </td>
+      <td class="text-end"><form method="post" action="{{ url_for('actions.delete', action_id=act.id) }}" onsubmit="return confirm('Delete this action?')">
+        <button class="btn btn-sm btn-link text-danger p-0"><i class="bi bi-trash"></i></button></form></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-muted p-3">No action.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

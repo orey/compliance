@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_macros.html" import result_badge, action_badge, priority_badge, status_bar, score %}
+{% block title %}Report · {{ a.name }}{% endblock %}
+{% block content %}
+<nav class="small mb-2"><a href="{{ url_for('assessments.index') }}">Assessments</a> / <a href="{{ url_for('frameworks.detail', framework_id=a.framework.id) }}">{{ a.framework.name }}</a> /</nav>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h3 class="mb-1">{{ a.name }}
+      {% if a.is_completed %}<span class="badge text-bg-success fs-6 align-middle">completed</span>
+      {% else %}<span class="badge text-bg-primary fs-6 align-middle">in progress</span>{% endif %}</h3>
+    <div class="text-muted small">{{ a.version.display_name }} · {{ a.reference_date|d }}{% if a.assessor %} · {{ a.assessor }}{% endif %}</div>
+    {% if a.scope %}<div class="small mt-1"><strong>Scope:</strong> {{ a.scope }}</div>{% endif %}
+    {% if a.general_comment %}<div class="small pre-wrap mt-1"><strong>Comment:</strong> {{ a.general_comment }}</div>{% endif %}
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('assessments.work', assessment_id=a.id) }}">{{ 'View answers' if a.is_completed else 'Continue assessing' }}</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('frameworks.framework_evolution', framework_id=a.framework.id) }}"><i class="bi bi-graph-up"></i> Evolution</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('assessments.export', assessment_id=a.id) }}"><i class="bi bi-download"></i> Export .xlsx</a>
+    {% if a.is_completed %}<a class="btn btn-primary" href="{{ url_for('assessments.create', version_id=a.framework.latest_published.id, based_on_id=a.id) }}">Start follow-up assessment</a>{% endif %}
+  </div>
+</div>
+
+{# KPIs #}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="value">{{ score(kpis.score) }}</div><div class="label">Compliance score</div>
+    {% if prev_kpis and prev_kpis.score is not none and kpis.score is not none %}
+      {% set delta = (kpis.score - prev_kpis.score)|round(1) %}
+      <div class="small {{ 'text-success' if delta > 0 else ('text-danger' if delta < 0 else 'text-muted') }}">{{ '%+.1f'|format(delta) }} pts vs previous</div>
+    {% endif %}
+  </div></div></div>
+  {% for key, label, color in RESULT_STATUSES %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="value text-{{ color }}">{{ kpis.counts[key] }}</div><div class="label">{{ label }}</div>
+    {% if prev_kpis %}<div class="small text-muted">previous: {{ prev_kpis.counts[key] }}</div>{% endif %}
+  </div></div></div>
+  {% endfor %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body">
+    <div class="value">{{ kpis.actions.open_total }}</div><div class="label">Open actions</div>
+    {% if kpis.actions.overdue %}<div class="small text-danger">{{ kpis.actions.overdue }} overdue</div>{% endif %}
+  </div></div></div>
+</div>
+{% if kpis.counts.not_assessed or kpis.needs_review %}
+  <div class="alert alert-warning py-2 small">{{ kpis.counts.not_assessed }} requirement(s) not assessed{% if kpis.needs_review %}, {{ kpis.needs_review }} answer(s) to review{% endif %}.</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+  <div class="col-xl-6"><div class="card h-100">
+    <div class="card-header bg-white fw-semibold">By section</div>
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Section</th><th style="width:50%">Results</th><th>Score</th></tr></thead>
+      <tbody>
+      {% for s in kpis.sections %}
+        <tr><td>{{ s.name }}</td><td>{{ status_bar(s.counts, s.total) }}</td><td>{{ score(s.score) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+
+  <div class="col-xl-6"><div class="card h-100">
+    <div class="card-header bg-white fw-semibold">Changes since previous assessment</div>
+    {% if not diff %}
+      <div class="card-body text-muted">No earlier completed assessment of {{ a.framework.name }} to compare with.</div>
+    {% else %}
+      <div class="card-body pb-0 small text-muted">Compared with <a href="{{ url_for('assessments.report', assessment_id=prev.id) }}">{{ prev.name }}</a> ({{ prev.reference_date|d }}, version {{ prev.version.label }}).</div>
+      <div class="accordion accordion-flush" id="diff">
+      {% for key, label, cls in [('improved', 'Improved', 'success'), ('regressed', 'Regressed', 'danger'), ('changed', 'Other status changes', 'secondary'), ('new', 'New requirements / not in previous', 'primary'), ('removed', 'No longer in this version', 'secondary')] %}
+        <div class="accordion-item">
+          <h2 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#d-{{ key }}" {{ 'disabled' if not diff[key] }}>
+            <span class="badge text-bg-{{ cls }} me-2">{{ diff[key]|length }}</span> {{ label }}</button></h2>
+          <div id="d-{{ key }}" class="accordion-collapse collapse"><div class="accordion-body p-0">
+            <table class="table table-sm mb-0 small">
+            {% for cur, old in diff[key] %}
+              {% set req = (cur or old).requirement %}
+              <tr><td class="text-nowrap ps-3">{{ req.code }}</td><td>{{ req.title|truncate(70) }}</td>
+                <td class="text-nowrap">{% if old %}{{ result_badge(old.status) }}{% endif %}{% if old and cur %} → {% endif %}{% if cur %}{{ result_badge(cur.status) }}{% endif %}</td></tr>
+            {% endfor %}
+            </table>
+          </div></div>
+        </div>
+      {% endfor %}
+      </div>
+      <div class="card-body small text-muted pt-2">{{ diff.unchanged|length }} requirement(s) unchanged.</div>
+    {% endif %}
+  </div></div>
+</div>
+
+{# Action plan #}
+<div class="card mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">Action plan</span>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('actions.form', assessment_id=a.id) }}"><i class="bi bi-plus-lg"></i> Add action</a>
+  </div>
+  {% set actions = a.actions %}{% set show_assessment = false %}
+  {% include "actions/_table.html" %}
+</div>
+
+{# Non-compliances and partial compliances #}
+<div class="card">
+  <div class="card-header bg-white fw-semibold">Gaps (non compliant and partially compliant)</div>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Code</th><th>Requirement</th><th>Status</th><th>Comment</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for r in a.results|sort(attribute='requirement.position') if r.status in ('non_compliant', 'partial') %}
+      <tr>
+        <td class="text-nowrap">{{ r.requirement.code }}</td>
+        <td>{{ r.requirement.title }}</td>
+        <td>{{ result_badge(r.status) }}</td>
+        <td class="small pre-wrap">{{ r.comment }}</td>
+        <td class="small">{% set acts = a.actions|selectattr('requirement_id', 'equalto', r.requirement_id)|list %}
+          {% if acts %}{{ acts|length }} action(s){% else %}<a href="{{ url_for('actions.form', assessment_id=a.id, requirement_id=r.requirement_id) }}" class="text-danger">no action — add</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-muted p-3">No gap.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

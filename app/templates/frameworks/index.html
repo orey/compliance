@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Repositories{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Repositories of requirements</h3>
+  <a class="btn btn-outline-secondary" href="{{ url_for('frameworks.template') }}"><i class="bi bi-file-earmark-spreadsheet"></i> Spreadsheet template</a>
+</div>
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card"><table class="table table-hover mb-0">
+      <thead><tr><th>Name</th><th>Versions</th><th>Latest published</th><th>Assessments</th></tr></thead>
+      <tbody>
+      {% for fw in frameworks %}
+        <tr>
+          <td><a class="fw-semibold" href="{{ url_for('frameworks.detail', framework_id=fw.id) }}">{{ fw.name }}</a>
+            <div class="small text-muted">{{ fw.description|truncate(120) }}</div></td>
+          <td>{{ fw.versions|length }}</td>
+          <td>{{ fw.latest_published.label if fw.latest_published else '—' }}</td>
+          <td>{{ fw.versions|map(attribute='assessments')|map('length')|sum }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-muted p-4">No repository yet. Create one on the right.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card"><div class="card-body">
+      <h5 class="card-title">New repository</h5>
+      <form method="post" action="{{ url_for('frameworks.create') }}">
+        <div class="mb-2"><label class="form-label">Name</label>
+          <input name="name" class="form-control" placeholder="e.g. ISO/IEC 27001" required></div>
+        <div class="mb-3"><label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="3"></textarea></div>
+        <button class="btn btn-primary">Create</button>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

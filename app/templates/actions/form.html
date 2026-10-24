@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit action' if action.id else 'New action' }}{% endblock %}
+{% block content %}
+<nav class="small mb-2"><a href="{{ url_for('assessments.report', assessment_id=assessment.id) }}">{{ assessment.name }}</a> /</nav>
+<h3>{{ 'Edit action' if action.id else 'New action' }}</h3>
+<div class="row"><div class="col-xl-8"><div class="card"><div class="card-body">
+<form method="post">
+  <input type="hidden" name="assessment_id" value="{{ assessment.id }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <div class="mb-3"><label class="form-label">Requirement</label>
+    <select name="requirement_id" class="form-select">
+      <option value="">— general action (no specific requirement) —</option>
+      {% for req in assessment.version.requirements %}
+        <option value="{{ req.id }}" {{ 'selected' if action.requirement_id == req.id }}>{{ req.code }} — {{ req.title|truncate(90) }}</option>
+      {% endfor %}
+    </select></div>
+  <div class="mb-3"><label class="form-label">Action</label>
+    <input name="title" class="form-control" value="{{ action.title or '' }}" required></div>
+  <div class="mb-3"><label class="form-label">Description</label>
+    <textarea name="description" class="form-control" rows="3">{{ action.description or '' }}</textarea></div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-4"><label class="form-label">Owner</label><input name="owner" class="form-control" value="{{ action.owner or '' }}"></div>
+    <div class="col-md-3"><label class="form-label">Due date</label><input type="date" name="due_date" class="form-control" value="{{ action.due_date.isoformat() if action.due_date else '' }}"></div>
+    <div class="col-md-2"><label class="form-label">Priority</label>
+      <select name="priority" class="form-select">{% for key, label in PRIORITIES %}<option value="{{ key }}" {{ 'selected' if action.priority == key }}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label">Status</label>
+      <select name="status" class="form-select">
+        {% for key, label, color in ACTION_STATUSES if key != 'carried_over' or action.status == key %}<option value="{{ key }}" {{ 'selected' if action.status == key }}>{{ label }}</option>{% endfor %}
+      </select></div>
+  </div>
+  {% if action.closed_at %}<div class="small text-muted mb-3">Closed on {{ action.closed_at|d }}.</div>{% endif %}
+  <button class="btn btn-primary">Save</button>
+  <a class="btn btn-link" href="{{ next or url_for('assessments.report', assessment_id=assessment.id) }}">Cancel</a>
+</form>
+</div></div></div></div>
+{% endblock %}

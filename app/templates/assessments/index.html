@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Assessments{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h3 class="mb-0">Assessments</h3>
+  <div class="btn-group">
+    {% for key, label in [('', 'All'), ('in_progress', 'In progress'), ('completed', 'Completed')] %}
+      <a class="btn btn-sm {{ 'btn-dark' if status == key else 'btn-outline-dark' }}" href="{{ url_for('assessments.index', status=key) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+<div class="card"><table class="table table-hover mb-0">
+  <thead><tr><th>Date</th><th>Name</th><th>Repository</th><th>Version</th><th>Assessor</th><th>Status</th><th>Open actions</th><th></th></tr></thead>
+  <tbody>
+  {% for a in assessments %}
+    <tr>
+      <td class="text-nowrap">{{ a.reference_date|d }}</td>
+      <td><a class="fw-semibold" href="{{ url_for('assessments.work', assessment_id=a.id) }}">{{ a.name }}</a></td>
+      <td>{{ a.framework.name }}</td>
+      <td>{{ a.version.label }}</td>
+      <td>{{ a.assessor }}</td>
+      <td>{% if a.is_completed %}<span class="badge text-bg-success">completed</span>{% else %}<span class="badge text-bg-primary">in progress</span>{% endif %}</td>
+      <td>{{ a.actions|selectattr('is_open')|list|length }}</td>
+      <td class="text-end text-nowrap">
+        {% if not a.is_completed %}<a class="btn btn-sm btn-primary" href="{{ url_for('assessments.work', assessment_id=a.id) }}">Continue</a>{% endif %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('assessments.report', assessment_id=a.id) }}">Report</a>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-muted p-4">No assessment. <a href="{{ url_for('assessments.create') }}">Start one.</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

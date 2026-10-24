@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit ' ~ req.code if req else 'New requirement' }}{% endblock %}
+{% block content %}
+{% set src = form or req %}
+<nav class="small mb-2"><a href="{{ url_for('frameworks.detail', framework_id=v.framework.id) }}">{{ v.framework.name }}</a> / <a href="{{ url_for('frameworks.version', version_id=v.id) }}">{{ v.label }}</a> /</nav>
+<h3>{{ 'Edit requirement ' ~ req.code if req else 'New requirement' }}</h3>
+<div class="row"><div class="col-xl-8"><div class="card"><div class="card-body">
+  {% if req and req.predecessor %}
+    <div class="alert alert-light small">Same requirement in {{ v.previous_version.label }}: <strong>{{ req.predecessor.code }}</strong> — {{ req.predecessor.title }}.
+      Changing the text marks it as <em>modified</em>.</div>
+  {% endif %}
+  <form method="post">
+    <div class="row g-3 mb-3">
+      <div class="col-md-3"><label class="form-label">Code</label><input name="code" class="form-control" value="{{ src.code if src else '' }}" required></div>
+      <div class="col-md-9"><label class="form-label">Section</label><input name="section" class="form-control" value="{{ src.section if src else '' }}"></div>
+    </div>
+    <div class="mb-3"><label class="form-label">Title</label><input name="title" class="form-control" value="{{ src.title if src else '' }}" required></div>
+    <div class="mb-3"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="5">{{ src.description if src else '' }}</textarea></div>
+    <div class="mb-3"><label class="form-label">Guidance</label><textarea name="guidance" class="form-control" rows="3">{{ src.guidance if src else '' }}</textarea></div>
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-link" href="{{ url_for('frameworks.version', version_id=v.id) }}">Cancel</a>
+  </form>
+</div></div></div></div>
+{% endblock %}

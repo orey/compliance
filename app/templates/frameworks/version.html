@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "_macros.html" import change_badge %}
+{% block title %}{{ v.display_name }}{% endblock %}
+{% block content %}
+<nav class="small mb-2"><a href="{{ url_for('frameworks.index') }}">Repositories</a> / <a href="{{ url_for('frameworks.detail', framework_id=v.framework.id) }}">{{ v.framework.name }}</a> /</nav>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h3 class="mb-1">{{ v.display_name }}
+      {% if v.is_published %}<span class="badge text-bg-success fs-6 align-middle">published {{ v.published_at|d }}</span>
+      {% else %}<span class="badge text-bg-secondary fs-6 align-middle">draft</span>{% endif %}</h3>
+    <div class="text-muted small">
+      {% if v.effective_date %}Effective {{ v.effective_date|d }} · {% endif %}
+      {% if v.previous_version %}Evolves from <a href="{{ url_for('frameworks.version', version_id=v.previous_version.id) }}">{{ v.previous_version.label }}</a>{% else %}First version{% endif %}
+    </div>
+    {% if v.notes %}<div class="pre-wrap mt-1">{{ v.notes }}</div>{% endif %}
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('frameworks.export_version', version_id=v.id) }}"><i class="bi bi-download"></i> Export .xlsx</a>
+    {% if v.is_published %}
+      <a class="btn btn-primary" href="{{ url_for('assessments.create', version_id=v.id) }}">Start an assessment</a>
+    {% else %}
+      <a class="btn btn-outline-primary" href="{{ url_for('frameworks.requirement_form', version_id=v.id) }}"><i class="bi bi-plus-lg"></i> Add requirement</a>
+      <button class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#reupload"><i class="bi bi-upload"></i> Replace from file</button>
+      <form method="post" action="{{ url_for('frameworks.publish', version_id=v.id) }}" onsubmit="return confirm('Once published, the version can no longer be modified. Publish?')">
+        <button class="btn btn-success"><i class="bi bi-check2-circle"></i> Publish</button></form>
+      <form method="post" action="{{ url_for('frameworks.delete_version', version_id=v.id) }}" onsubmit="return confirm('Delete this draft?')">
+        <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if not v.is_published %}
+<div class="collapse mb-3" id="reupload"><div class="card"><div class="card-body">
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('frameworks.reupload', version_id=v.id) }}" class="d-flex gap-2">
+    <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.csv" required>
+    <button class="btn btn-primary text-nowrap">Replace content</button>
+  </form>
+  <div class="form-text">Replaces all requirements of this draft. Changes are recomputed against {{ v.previous_version.label if v.previous_version else 'nothing (first version)' }}.</div>
+</div></div></div>
+{% endif %}
+
+{% if v.previous_version %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% for key, label in [('', 'All (' ~ summary.total ~ ')'), ('new', 'New (' ~ summary.new ~ ')'), ('modified', 'Modified (' ~ summary.modified ~ ')'), ('unchanged', 'Unchanged (' ~ summary.unchanged ~ ')'), ('removed', 'Removed (' ~ summary.removed ~ ')')] %}
+    <a class="btn btn-sm {{ 'btn-dark' if change_filter == key else 'btn-outline-dark' }}" href="{{ url_for('frameworks.version', version_id=v.id, change=key) }}">{{ label }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if change_filter == 'removed' %}
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Code</th><th>Section</th><th>Requirement (in {{ v.previous_version.label }})</th><th></th></tr></thead>
+  <tbody>
+  {% for r in removed %}
+    <tr><td class="text-nowrap">{{ r.code }}</td><td>{{ r.section }}</td>
+      <td><strong>{{ r.title }}</strong><div class="small text-muted pre-wrap">{{ r.description }}</div></td>
+      <td class="text-end">{% if not v.is_published %}
+        <form method="post" action="{{ url_for('frameworks.restore_requirement', version_id=v.id, req_id=r.id) }}"><button class="btn btn-sm btn-outline-primary">Restore</button></form>
+      {% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="text-muted p-3">No requirement removed.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="card"><table class="table mb-0">
+  <thead><tr><th style="width:8rem">Code</th><th style="width:16rem">Section</th><th>Requirement</th>{% if v.previous_version %}<th>Change</th>{% endif %}<th></th></tr></thead>
+  <tbody>
+  {% for r in v.requirements if not change_filter or r.change_type == change_filter %}
+    <tr id="req-{{ r.id }}">
+      <td class="text-nowrap">{{ r.code }}{% if r.predecessor and r.predecessor.code != r.code %}<div class="small text-muted">was {{ r.predecessor.code }}</div>{% endif %}</td>
+      <td>{{ r.section }}</td>
+      <td><strong>{{ r.title }}</strong>
+        {% if r.description %}<div class="small pre-wrap">{{ r.description }}</div>{% endif %}
+        {% if r.guidance %}<div class="small text-muted pre-wrap"><i class="bi bi-info-circle"></i> {{ r.guidance }}</div>{% endif %}
+        {% if r.change_type == 'modified' %}
+          <details class="small mt-1"><summary class="text-warning-emphasis">Previous wording ({{ v.previous_version.label }})</summary>
+            <div class="border-start ps-2 text-muted"><strong>{{ r.predecessor.title }}</strong> <em>{{ r.predecessor.section }}</em>
+              <div class="pre-wrap">{{ r.predecessor.description }}</div></div></details>
+        {% endif %}
+      </td>
+      {% if v.previous_version %}<td>{{ change_badge(r.change_type) }}</td>{% endif %}
+      <td class="text-end text-nowrap">{% if not v.is_published %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('frameworks.requirement_form', version_id=v.id, req_id=r.id) }}"><i class="bi bi-pencil"></i></a>
+        <form class="d-inline" method="post" action="{{ url_for('frameworks.delete_requirement', version_id=v.id, req_id=r.id) }}" onsubmit="return confirm('Remove {{ r.code }} from this version?')">
+          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></form>
+      {% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="text-muted p-3">No requirement.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+{% endblock %}

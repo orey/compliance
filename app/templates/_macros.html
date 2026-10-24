@@ -1,0 +1,43 @@
+{% macro result_badge(status) -%}
+  {%- for key, label, color in RESULT_STATUSES if key == status -%}
+    <span class="badge text-bg-{{ color }}">{{ label }}</span>
+  {%- else -%}
+    <span class="badge text-bg-light border">Not assessed</span>
+  {%- endfor -%}
+{%- endmacro %}
+
+{% macro action_badge(status) -%}
+  {%- for key, label, color in ACTION_STATUSES if key == status -%}
+    <span class="badge text-bg-{{ color }}">{{ label }}</span>
+  {%- endfor -%}
+{%- endmacro %}
+
+{% macro change_badge(change) -%}
+  {%- if change == 'new' -%}<span class="badge text-bg-primary">new</span>
+  {%- elif change == 'modified' -%}<span class="badge text-bg-warning">modified</span>
+  {%- elif change == 'removed' -%}<span class="badge text-bg-danger">removed</span>
+  {%- elif change == 'unchanged' -%}<span class="badge text-bg-light border text-muted">unchanged</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro priority_badge(p) -%}
+  <span class="badge {{ {'high': 'text-bg-danger', 'medium': 'text-bg-warning', 'low': 'text-bg-secondary'}[p] }}">{{ p }}</span>
+{%- endmacro %}
+
+{% macro status_bar(counts, total) -%}
+  {# Stacked progress bar of result counts. #}
+  <div class="progress-stacked" style="height: 1.1rem" title="{% for key, label, color in RESULT_STATUSES %}{{ label }}: {{ counts[key] }}&#10;{% endfor %}Not assessed: {{ counts['not_assessed'] }}">
+    {% for key, label, color in RESULT_STATUSES if counts[key] %}
+      <div class="progress" style="width: {{ 100 * counts[key] / total }}%"><div class="progress-bar bg-{{ color }}">{{ counts[key] }}</div></div>
+    {% endfor %}
+    {% if counts['not_assessed'] %}
+      <div class="progress" style="width: {{ 100 * counts['not_assessed'] / total }}%"><div class="progress-bar bg-light text-dark">{{ counts['not_assessed'] }}</div></div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro score(value) -%}
+  {%- if value is none -%}<span class="text-muted">n/a</span>
+  {%- else -%}<span class="fw-semibold {{ 'text-success' if value >= 80 else ('text-warning' if value >= 50 else 'text-danger') }}">{{ value }}%</span>
+  {%- endif -%}
+{%- endmacro %}

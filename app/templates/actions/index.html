@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Action plan{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h3 class="mb-0">Action plan</h3>
+  <form class="d-flex flex-wrap gap-2">
+    <select name="status" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option value="open" {{ 'selected' if status == 'open' }}>Open &amp; in progress</option>
+      <option value="overdue" {{ 'selected' if status == 'overdue' }}>Overdue</option>
+      {% for key, label, color in ACTION_STATUSES %}<option value="{{ key }}" {{ 'selected' if status == key }}>{{ label }}</option>{% endfor %}
+      <option value="" {{ 'selected' if not status }}>All</option>
+    </select>
+    <select name="framework_id" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <option value="">All repositories</option>
+      {% for fw in frameworks %}<option value="{{ fw.id }}" {{ 'selected' if framework_id == fw.id }}>{{ fw.name }}</option>{% endfor %}
+    </select>
+    <input name="owner" value="{{ owner }}" class="form-control form-control-sm w-auto" placeholder="Owner">
+    <button class="btn btn-sm btn-outline-dark">Filter</button>
+  </form>
+</div>
+<div class="card">
+  {% set show_assessment = true %}
+  {% include "actions/_table.html" %}
+</div>
+<div class="small text-muted mt-2">{{ actions|length }} action(s). Sorted by due date, then priority. Add actions from an assessment (per requirement or on the report page).</div>
+{% endblock %}

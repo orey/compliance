@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_macros.html" import change_badge %}
+{% block title %}{{ fw.name }}{% endblock %}
+{% block content %}
+<nav class="small mb-2"><a href="{{ url_for('frameworks.index') }}">Repositories</a> /</nav>
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h3 class="mb-1">{{ fw.name }}</h3>
+    <div class="text-muted pre-wrap">{{ fw.description }}</div>
+  </div>
+  <div class="text-nowrap">
+    <a class="btn btn-outline-primary" href="{{ url_for('frameworks.framework_evolution', framework_id=fw.id) }}"><i class="bi bi-graph-up"></i> Evolution</a>
+    <button class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#editFw"><i class="bi bi-pencil"></i></button>
+  </div>
+</div>
+
+<div class="collapse mb-3" id="editFw"><div class="card"><div class="card-body">
+  <form method="post" action="{{ url_for('frameworks.edit', framework_id=fw.id) }}" class="row g-2">
+    <div class="col-md-4"><input name="name" class="form-control" value="{{ fw.name }}" required></div>
+    <div class="col-md-6"><input name="description" class="form-control" value="{{ fw.description }}" placeholder="Description"></div>
+    <div class="col-md-2"><button class="btn btn-primary w-100">Save</button></div>
+  </form>
+  <form method="post" action="{{ url_for('frameworks.delete', framework_id=fw.id) }}" class="mt-2" onsubmit="return confirm('Delete this repository and all its versions?')">
+    <button class="btn btn-sm btn-link text-danger p-0">Delete repository</button>
+  </form>
+</div></div></div>
+
+<div class="card mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">Versions</span>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('frameworks.new_version', framework_id=fw.id) }}"><i class="bi bi-plus-lg"></i> New version</a>
+  </div>
+  <table class="table mb-0">
+    <thead><tr><th>Version</th><th>Status</th><th>Effective</th><th>Based on</th><th>Requirements</th><th>Changes vs previous</th><th></th></tr></thead>
+    <tbody>
+    {% for v in fw.versions|reverse %}
+      {% set s = summaries[v.id] %}
+      <tr>
+        <td><a class="fw-semibold" href="{{ url_for('frameworks.version', version_id=v.id) }}">{{ v.label }}</a></td>
+        <td>{% if v.is_published %}<span class="badge text-bg-success">published</span>{% else %}<span class="badge text-bg-secondary">draft</span>{% endif %}</td>
+        <td>{{ v.effective_date|d }}</td>
+        <td>{{ v.previous_version.label if v.previous_version else '—' }}</td>
+        <td>{{ s.total }}</td>
+        <td>{% if v.previous_version %}
+          {{ change_badge('new') }} {{ s.new }} &nbsp; {{ change_badge('modified') }} {{ s.modified }} &nbsp; {{ change_badge('removed') }} {{ s.removed }}
+        {% else %}<span class="text-muted">first version</span>{% endif %}</td>
+        <td class="text-end">
+          {% if v.is_published %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('assessments.create', version_id=v.id) }}">Assess</a>{% endif %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('frameworks.export_version', version_id=v.id) }}" title="Export to spreadsheet"><i class="bi bi-download"></i></a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-muted p-3">No version yet. <a href="{{ url_for('frameworks.new_version', framework_id=fw.id) }}">Upload the first one.</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-header bg-white fw-semibold">Assessments</div>
+  <table class="table table-hover mb-0">
+    <thead><tr><th>Date</th><th>Name</th><th>Version</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for a in assessments %}
+      <tr>
+        <td>{{ a.reference_date|d }}</td>
+        <td><a href="{{ url_for('assessments.work', assessment_id=a.id) }}">{{ a.name }}</a></td>
+        <td>{{ a.version.label }}</td>
+        <td>{% if a.is_completed %}<span class="badge text-bg-success">completed</span>{% else %}<span class="badge text-bg-primary">in progress</span>{% endif %}</td>
+        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('assessments.report', assessment_id=a.id) }}">Report</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-muted p-3">No assessment yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

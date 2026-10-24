@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score, status_bar %}
+{% block title %}Evolution · {{ fw.name }}{% endblock %}
+{% block content %}
+<nav class="small mb-2"><a href="{{ url_for('frameworks.index') }}">Repositories</a> / <a href="{{ url_for('frameworks.detail', framework_id=fw.id) }}">{{ fw.name }}</a> /</nav>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Compliance evolution — {{ fw.name }}</h3>
+  <form class="form-check form-switch">
+    <input class="form-check-input" type="checkbox" id="inc" name="include_in_progress" value="1" {{ 'checked' if include_in_progress }} onchange="this.form.submit()">
+    <label class="form-check-label" for="inc">Include assessments in progress</label>
+  </form>
+</div>
+
+{% if not evo.points %}
+  <div class="card"><div class="card-body text-muted">No {{ '' if include_in_progress else 'completed ' }}assessment yet for this repository.</div></div>
+{% else %}
+<div class="row g-4 mb-4">
+  <div class="col-xl-7"><div class="card h-100"><div class="card-body"><canvas id="evoChart" height="140"></canvas></div></div></div>
+  <div class="col-xl-5"><div class="card h-100"><table class="table table-sm mb-0">
+    <thead><tr><th>Date</th><th>Assessment</th><th>Version</th><th style="width:35%">Results</th><th>Score</th></tr></thead>
+    <tbody>
+    {% for p in evo.points|reverse %}
+      <tr>
+        <td class="text-nowrap">{{ p.assessment.reference_date|d }}</td>
+        <td><a href="{{ url_for('assessments.report', assessment_id=p.assessment.id) }}">{{ p.assessment.name }}</a>
+          {% if not p.assessment.is_completed %}<span class="badge text-bg-primary">in progress</span>{% endif %}</td>
+        <td>{{ p.assessment.version.label }}</td>
+        <td>{{ status_bar(p.counts, p.total) }}</td>
+        <td>{{ score(p.score) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="small text-muted p-2">Score = (compliant + ½ partial) / applicable assessed requirements.</div>
+  </div></div>
+</div>
+
+<div class="card">
+  <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span class="fw-semibold">Requirement history</span>
+    <span class="small">
+      {% for key, label, color in RESULT_STATUSES %}<span style="display:inline-block;width:.8rem;height:.8rem;border-radius:50%;background:{{ RESULT_HEX[key] }}" class="align-middle"></span> {{ label }} &nbsp;{% endfor %}
+      <span style="display:inline-block;width:.8rem;height:.8rem;border-radius:50%;border:1px solid #adb5bd" class="align-middle"></span> Not assessed &nbsp;
+      <span class="text-muted">· = requirement did not exist in that version</span>
+    </span>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-sm table-hover mb-0 matrix">
+    <thead><tr><th>Code</th><th>Requirement</th>
+      {% for a in evo.assessments %}<th class="rot text-center" title="{{ a.name }} ({{ a.version.label }})">{{ a.reference_date.strftime('%Y-%m') }}<br>{{ a.version.label }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for row in evo.matrix %}
+      <tr>
+        <td class="text-nowrap">{{ row.requirement.code }}</td>
+        <td><span title="{{ row.requirement.description }}">{{ row.requirement.title|truncate(80) }}</span>
+          {% if row.cells[-1] is none %}<span class="badge text-bg-danger">no longer in latest</span>{% endif %}</td>
+        {% for c in row.cells %}
+          <td class="cell">
+            {% if c is none %}<span class="absent">·</span>
+            {% elif c == 'not_assessed' %}<span class="dot" style="border:1px solid #adb5bd" title="Not assessed"></span>
+            {% else %}<span class="dot" style="background:{{ RESULT_HEX[c] }}" title="{{ c|replace('_', ' ') }}"></span>{% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if evo.points %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  const points = {{ evo.points|map(attribute='counts')|list|tojson }};
+  const scores = {{ evo.points|map(attribute='score')|list|tojson }};
+  const labels = {{ evo.assessments|map(attribute='reference_date')|map('string')|list|tojson }};
+  const series = [
+    {% for key, label, color in RESULT_STATUSES %}['{{ key }}', '{{ label }}', '{{ RESULT_HEX[key] }}'],{% endfor %}
+    ['not_assessed', 'Not assessed', '#ced4da'],
+  ];
+  new Chart(document.getElementById('evoChart'), {
+    data: {
+      labels,
+      datasets: [
+        { type: 'line', label: 'Score %', data: scores, yAxisID: 'y1', borderColor: '#0d6efd', backgroundColor: '#0d6efd', tension: .2 },
+        ...series.map(([key, label, color]) => ({ type: 'bar', label, data: points.map(p => p[key]), backgroundColor: color, stack: 's' })),
+      ],
+    },
+    options: {
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, title: { display: true, text: 'Requirements' } },
+        y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: 'Score %' } },
+      },
+    },
+  });
+</script>
+{% endif %}
+{% endblock %}

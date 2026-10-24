@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}New assessment{% endblock %}
+{% block content %}
+<h3>New assessment</h3>
+{% if not versions %}
+  <div class="alert alert-info">There is no published repository version yet. <a href="{{ url_for('frameworks.index') }}">Create and publish one first.</a></div>
+{% else %}
+<div class="row"><div class="col-xl-8"><div class="card"><div class="card-body">
+<form method="post">
+  <div class="mb-3"><label class="form-label">Repository version</label>
+    <select name="version_id" id="version" class="form-select" required>
+      <option value="">— choose —</option>
+      {% for v in versions %}
+        <option value="{{ v.id }}" data-framework="{{ v.framework_id }}" {{ 'selected' if form.get('version_id') == v.id|string }}>
+          {{ v.framework.name }} — {{ v.label }} ({{ v.requirements|length }} requirements)</option>
+      {% endfor %}
+    </select></div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6"><label class="form-label">Name</label>
+      <input name="name" class="form-control" value="{{ form.get('name', '') }}" placeholder="e.g. Annual review {{ today.year }}" required></div>
+    <div class="col-md-3"><label class="form-label">Assessor</label>
+      <input name="assessor" class="form-control" value="{{ form.get('assessor', '') }}"></div>
+    <div class="col-md-3"><label class="form-label">Assessment date</label>
+      <input type="date" name="assessment_date" class="form-control" value="{{ form.get('assessment_date') or today.isoformat() }}"></div>
+  </div>
+  <div class="mb-3"><label class="form-label">Scope</label>
+    <textarea name="scope" class="form-control" rows="2" placeholder="Perimeter, entities, systems...">{{ form.get('scope', '') }}</textarea></div>
+
+  <div class="border rounded p-3 bg-light mb-3">
+    <label class="form-label fw-semibold">Start from a previous assessment (optional)</label>
+    <select name="based_on_id" id="basedOn" class="form-select">
+      <option value="">— start from scratch —</option>
+      {% for a in previous %}
+        <option value="{{ a.id }}" data-framework="{{ a.version.framework_id }}" {{ 'selected' if form.get('based_on_id') == a.id|string }}>
+          {{ a.reference_date|d }} · {{ a.name }} ({{ a.version.display_name }}{{ ', in progress' if not a.is_completed }})</option>
+      {% endfor %}
+    </select>
+    <div class="form-text">Answers, comments and evidence are copied for requirements that still exist, even across versions.
+      Answers on requirements whose wording changed are flagged <em>to review</em>; new requirements start unanswered.</div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" name="carry_actions" id="carry" value="1" {{ 'checked' if form.get('carry_actions', '1') }}>
+      <label class="form-check-label" for="carry">Carry over open actions (they are marked "carried over" in the previous assessment)</label>
+    </div>
+  </div>
+  <button class="btn btn-primary">Create assessment</button>
+</form>
+</div></div></div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  // Only offer previous assessments of the same repository.
+  const version = document.getElementById('version'), basedOn = document.getElementById('basedOn');
+  function filterPrevious() {
+    const fw = version.selectedOptions[0]?.dataset.framework;
+    for (const opt of basedOn.options) {
+      if (!opt.value) continue;
+      opt.hidden = opt.dataset.framework !== fw;
+      if (opt.hidden && opt.selected) basedOn.value = '';
+    }
+  }
+  if (version) { version.addEventListener('change', filterPrevious); filterPrevious(); }
+</script>
+{% endblock %}
